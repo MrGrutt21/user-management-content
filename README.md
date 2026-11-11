@@ -13,10 +13,11 @@ npm run dev            # http://localhost:3000 (the demo reset button is on in d
 
 | Command | What it does |
 |---|---|
-| `npm run check` | typecheck + lint (incl. import boundaries) + tests |
-| `npm test` | Vitest: permission matrix, rules, sessions, route handlers |
+| `npm run check` | typecheck + lint (incl. import boundaries) + unit/HTTP tests; also runs as a pre-commit hook |
+| `npm test` | Vitest: permission matrix, rules, sessions, route handlers, architecture rules |
 | `npm run build && npm start` | production build (one process; data resets on restart) |
-| `docker build -t umc . && docker run -p 3000:3000 -e DEMO_RESET=true umc` | the same in Docker |
+| `docker compose up --build` | the production image on http://localhost:3000 with the demo reset on (`HOST_PORT=3200` for another port) |
+| `npm run test:e2e` | Playwright against a running server (`BASE_URL`, default http://localhost:3000); needs `DEMO_RESET=true`. Run `npx playwright install chromium` once first. |
 
 Node ≥ 20.9. No database and no environment variables are required. `DEMO_RESET=true` enables the reset button, and `COOKIE_SECURE` overrides the automatic `Secure` cookie flag.
 
@@ -86,6 +87,7 @@ All endpoints return JSON. Errors look like `{ "error": { "code", "message" } }`
 | `PATCH /api/users/:id/role` | IT | `{ role }` |
 | `PATCH /api/users/:id/status` | IT | `{ status: "active" \| "deactivated" }` |
 | `POST /api/demo/reset` | anyone, only with `DEMO_RESET=true` | restore the seed, sign everyone out |
+| `GET /api/health` | anyone | `{ ok: true }`, for the container health check |
 
 There is one endpoint per column of the permission table, so a field cannot ride along in a request that was authorised for another field.
 
@@ -93,8 +95,10 @@ Status codes:
 - 401: not logged in or the session has ended.
 - 403: the role can't do this, the target is outside your scope, or you are acting on yourself.
 - 409: the last active IT, or the email is taken.
-- 400: validation failed.
-- 404: not found.
+- 400: validation failed (unknown keys included).
+- 404: not found, including an unknown `/api/*` path.
+- 405: a method the route does not have. There is no `DELETE`: users are deactivated, never deleted.
+- 413: a body over 16 KB. 415: a body not sent as `application/json`.
 
 ```bash
 # Anna logs in and tries to edit Dmytro (not her report) -> 403
@@ -112,9 +116,30 @@ curl -b ivan.txt -X PATCH -H 'Content-Type: application/json' -d '{"status":"dea
 curl -b ivan.txt -X PATCH -H 'Content-Type: application/json' -d '{"status":"deactivated"}' localhost:3000/api/users/usr_ivan/status
 ```
 
+## Rules for contributors and AI agents
+
+[AGENTS.md](AGENTS.md) holds the rules: where things live, what may import what, the rules an agent is likely to break, and how to add a role. `CLAUDE.md` and `.cursor/rules/project.mdc` point to it.
+
+The rules are enforced, not only written down. The pre-commit hook runs `npm run check`, which fails on any of these:
+- a role string compared outside `roles.ts`;
+- an `any`, a cast or an `eslint-disable`;
+- a route or page missing from the inventory in `tests/architecture.test.ts`, or one without its guard;
+- an import across a boundary.
+
+## Tests
+
+- **Unit and HTTP (Vitest, `npm test`).**
+  - `tests/permissions.test.ts`: the permission table written out literally. It is the spec.
+  - `tests/user-rules.test.ts`, `tests/manager-links.test.ts`: rules 1–5 and who reports to whom, on the seeded store.
+  - `tests/api.test.ts`, `tests/api-edge-cases.test.ts`: the six scenarios and the edge cases around them, through the real route handlers. The edge cases include bad bodies, races, session expiry and rotation, and role changes mid-session.
+  - `tests/architecture.test.ts`: the route inventory with each method's guard, plus the structural rules in AGENTS.md.
+- **End to end (Playwright, `npm run test:e2e`)** against the production server, normally the Docker container.
+  - `e2e/http.spec.ts`: page statuses and redirects for each role, 405/404/413/415, cookie flags, payload size, a race between two IT.
+  - `e2e/ui.spec.ts`: the six scenarios and the forms, clicked through in Chromium.
+
 ## The six scenarios
 
-All six are covered by `tests/api.test.ts`, which calls the real route handlers with a session cookie. They were also walked through by hand in the browser.
+All six are covered twice: in `tests/api.test.ts` through the route handlers, and in `e2e/ui.spec.ts` in a real browser against the container.
 
 1. **Anna sees only her four reports.** On `/manage-users` she sees four rows, and her only control is "Edit". `PATCH /api/users/usr_dmytro` → 403.
 2. **Anna cannot make herself IT.** `PATCH /api/users/usr_anna/role` → 403.
@@ -153,7 +178,6 @@ All six are covered by `tests/api.test.ts`, which calls the real route handlers 
 
 ## With another four hours
 
-- Playwright end-to-end tests for the six scenarios, including Olena being bounced to `/login` mid-browse.
 - An audit trail (who changed what, when) shown to IT.
 - Reassigning `managerId` from the UI, with rules for what happens to a demoted manager's reports.
 - Session expiry and rotation in the UI, rate limiting on login, and per-request logging with the actor id.

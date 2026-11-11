@@ -22,6 +22,8 @@ A Next.js 16 (App Router) app with three roles (IT, manager, user), users kept i
 | Types | `npm run typecheck` (runs `next typegen` first: `LayoutProps`/`PageProps` come from it) |
 | Lint | `npm run lint` (also enforces the import boundaries below) |
 | Tests | `npm test` (Vitest, `tests/**/*.test.ts`) |
+| Docker | `docker compose up --build` → http://localhost:3000 (`HOST_PORT=3200` for another port) |
+| End to end | `npm run test:e2e` (Playwright, `e2e/*.spec.ts`) against a running server with `DEMO_RESET=true`; `BASE_URL` picks it |
 | All checks | `npm run check`. The pre-commit hook (`.githooks/`, installed by `npm install`) runs it on every commit. Never use `--no-verify`. |
 
 ## Where things live

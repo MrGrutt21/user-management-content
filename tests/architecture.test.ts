@@ -160,7 +160,8 @@ describe('server code and the store', () => {
     const offenders = SRC.flatMap((file) =>
       read(file)
         .split('\n')
-        .filter((line) => /^\S/.test(line) && line.includes('getStore()') && !line.startsWith('export function getStore'))
+        // A top-level line that calls getStore() right away (not inside a function or arrow).
+        .filter((line) => /^\S/.test(line) && line.includes('getStore()') && !/=>|\bfunction\b/.test(line))
         .map((line) => `${file}: ${line}`),
     );
     expect(offenders).toEqual([]);
