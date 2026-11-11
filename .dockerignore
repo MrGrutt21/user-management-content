@@ -9,8 +9,15 @@ next-env.d.ts
 .gitignore
 .gitattributes
 .claude
+.cursor
+.githooks
+.eslintcache
 coverage
 tests
+e2e
+playwright-report
+test-results
+compose.yaml
 *.md
 Dockerfile
 .dockerignore

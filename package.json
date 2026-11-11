@@ -12,6 +12,7 @@
     "lint": "eslint --cache --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "check": "npm run typecheck && npm run lint && npm test",
     "prepare": "node -e \"if (require('fs').existsSync('.git')) require('child_process').execSync('git config core.hooksPath .githooks')\""
   },

@@ -4,6 +4,7 @@
 # in memory. A second replica would have its own users and its own sessions, and a
 # restart resets everything to the seed.
 #
+#   docker compose up --build            (see compose.yaml), or by hand:
 #   docker build -t user-management .
 #   docker run -p 3000:3000 -e DEMO_RESET=true user-management
 #
@@ -41,4 +42,6 @@ COPY --from=build --chown=node:node /app/public ./public
 # Unprivileged user that ships with the official Node image.
 USER node
 EXPOSE 3000
+# Healthy once the server answers /api/health (alpine has no curl; Node's fetch does the job).
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3   CMD ["node", "-e", "fetch('http://127.0.0.1:' + process.env.PORT + '/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
 CMD ["node", "server.js"]

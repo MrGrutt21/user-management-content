@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
   },
   // Self-contained server for Docker. It must run as ONE process: users, clients and sessions live in memory.
   output: "standalone",
+  // No `X-Powered-By: Next.js` header.
+  poweredByHeader: false,
 };
 
 export default nextConfig;

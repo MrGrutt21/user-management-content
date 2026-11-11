@@ -1,0 +1,14 @@
+# The production image, locally:  docker compose up --build   ->  http://localhost:3000
+# Another port:                   HOST_PORT=3200 docker compose up --build
+#
+# Exactly one replica: users and sessions live in that one Node process (see Dockerfile).
+services:
+  app:
+    build: .
+    image: user-management-content:local
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    environment:
+      # The "Reset demo data" button and the demo logins on /login. Set to false to hide them.
+      DEMO_RESET: "${DEMO_RESET:-true}"
+    restart: unless-stopped
