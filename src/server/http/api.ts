@@ -125,7 +125,7 @@ function assertSameOrigin(req: NextRequest): void {
   } catch {
     throw new AppError(ERROR_CODE.FORBIDDEN, 'Bad Origin header');
   }
-  if (host !== null && originHost !== host) {
+  if (host === null || originHost !== host) {
     throw new AppError(ERROR_CODE.FORBIDDEN, 'Cross-site request rejected');
   }
 }
