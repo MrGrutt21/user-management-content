@@ -97,16 +97,47 @@ export function errorResponse(error: unknown): Response {
   return json(internal.toBody(), { status: internal.status });
 }
 
-/** The JSON body as `unknown` (undefined when there is none). Handlers validate it with `parseOrThrow`. */
+/** Every request body here is a few short fields; anything bigger is refused before it is buffered. */
+export const MAX_BODY_BYTES = 16 * 1024;
+
+/**
+ * The JSON body as `unknown` (undefined when there is none). Handlers validate it with `parseOrThrow`.
+ * A body must be JSON (415 otherwise) and at most MAX_BODY_BYTES (413), whatever Content-Length claims.
+ */
 async function readBody(req: NextRequest): Promise<unknown> {
   if (req.method === 'GET' || req.method === 'HEAD') return undefined;
-  const text = await req.text();
+  const text = await readLimitedText(req);
   if (text.trim() === '') return undefined;
+  const contentType = req.headers.get('content-type') ?? '';
+  if (!/^application\/json\s*(;|$)/i.test(contentType)) {
+    throw new AppError(ERROR_CODE.UNSUPPORTED_MEDIA_TYPE, 'Send the body as JSON with Content-Type: application/json');
+  }
   try {
-    return JSON.parse(text);
+    const parsed: unknown = JSON.parse(text);
+    return parsed;
   } catch {
     throw new AppError(ERROR_CODE.VALIDATION, 'Body must be valid JSON');
   }
+}
+
+async function readLimitedText(req: NextRequest): Promise<string> {
+  const tooLarge = () => new AppError(ERROR_CODE.PAYLOAD_TOO_LARGE, `The body must be at most ${MAX_BODY_BYTES} bytes`);
+  if (Number(req.headers.get('content-length') ?? '0') > MAX_BODY_BYTES) throw tooLarge();
+  if (!req.body) return '';
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel();
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 /**

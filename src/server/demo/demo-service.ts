@@ -3,8 +3,7 @@ import 'server-only';
 import { ROLE_POLICIES } from '@/domain/roles';
 import type { DemoAccount } from '@/domain/types';
 import { getConfig } from '@/server/config';
-import { seedUsers } from '@/server/db/seed-users';
-import { resetStore } from '@/server/db/store';
+import { getStore, resetStore } from '@/server/db/store';
 
 /**
  * Live-demo helpers, all behind DEMO_RESET=true. Reviewers share one in-memory
@@ -21,11 +20,15 @@ export function resetDemoData(): void {
   resetStore();
 }
 
-/** The seeded logins, shown on /login. Empty unless demo mode is on: passwords are never shown otherwise. */
+/**
+ * Every login as it is now (seeded first, then any created since the last reset), shown on /login.
+ * Read from the live store, so a changed email, role or status shows up at once.
+ * Empty unless demo mode is on: passwords are never shown otherwise.
+ */
 export function listDemoAccounts(): DemoAccount[] {
   if (!isDemoResetEnabled()) return [];
-  const { users, credentials } = seedUsers();
-  return users.map((user) => ({
+  const { users, credentials } = getStore();
+  return [...users.values()].map((user) => ({
     fullName: user.fullName,
     email: user.email,
     password: credentials.get(user.id) ?? '',

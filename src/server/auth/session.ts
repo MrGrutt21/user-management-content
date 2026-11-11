@@ -25,9 +25,14 @@ export type CookieOptions = {
 
 export function createSession(userId: string): { token: string; expiresAt: number } {
   const now = Date.now();
+  const { sessions } = getStore();
+  // Expired sessions are otherwise removed only when their cookie comes back; clean up here.
+  for (const [token, session] of sessions) {
+    if (session.expiresAt <= now) sessions.delete(token);
+  }
   const token = randomBytes(32).toString('base64url');
   const expiresAt = now + getConfig().sessionTtlMs;
-  getStore().sessions.set(token, { userId, createdAt: now, expiresAt });
+  sessions.set(token, { userId, createdAt: now, expiresAt });
   return { token, expiresAt };
 }
 
