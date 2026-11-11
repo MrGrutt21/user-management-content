@@ -14,6 +14,7 @@ import {
 } from '@/domain/client-query';
 import { PATHS, clientPath } from '@/domain/paths';
 import { CLIENT_STATUS, type Client, type Page } from '@/domain/types';
+import { clientsPageResponse } from '@/domain/responses';
 import { ApiError, apiFetch } from '@/lib/api-client';
 
 import { ClientStatusBadge } from './ClientStatusBadge';
@@ -64,7 +65,7 @@ function ClientsView({ query }: { query: ClientsQuery }) {
   useEffect(() => {
     // Set when the URL changes again before this answer arrives, so a slow old response cannot overwrite a newer one.
     let stale = false;
-    apiFetch<Page<Client>>(apiParams ? `/api/clients?${apiParams}` : '/api/clients').then(
+    apiFetch(apiParams ? `/api/clients?${apiParams}` : '/api/clients', clientsPageResponse).then(
       (page) => {
         if (!stale) setLoaded({ key: apiParams, page, error: null });
       },

@@ -5,6 +5,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 
 import { ERROR_CODE, type Decision } from '@/domain/errors';
 import { USER_STATUS, type UserRow } from '@/domain/types';
+import { userResponse } from '@/domain/responses';
 import { apiFetch } from '@/lib/api-client';
 
 import { errorMessage } from './api-errors';
@@ -30,7 +31,7 @@ export function UserRowEditor({ row, roleOptions }: Props) {
     setBusy(true);
     setError(null);
     try {
-      await apiFetch(path, { method: 'PATCH', body });
+      await apiFetch(path, userResponse, { method: 'PATCH', body });
       router.refresh();
       return true;
     } catch (err) {

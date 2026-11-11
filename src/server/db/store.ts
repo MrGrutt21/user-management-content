@@ -39,18 +39,21 @@ export function createStore(): Store {
  * One store per process. Next.js can evaluate a module more than once (dev HMR,
  * separate bundles for route handlers and server components), and a plain
  * module-level `const` would then give each copy its own users and sessions.
- * globalThis is shared by all of them. The cast only adds our own property.
+ * globalThis is shared by all of them, so the store is kept there.
  */
-const globalForStore = globalThis as typeof globalThis & { __appStore?: Store };
+declare global {
+  // `var` (not let/const) is how TypeScript declares a property of globalThis.
+  var __appStore: Store | undefined;
+}
 
 /** Always call this; never keep the result in a module-level variable (reset swaps the object). */
 export function getStore(): Store {
-  globalForStore.__appStore ??= createStore();
-  return globalForStore.__appStore;
+  globalThis.__appStore ??= createStore();
+  return globalThis.__appStore;
 }
 
 /** Back to the factory seed: users, passwords, clients and all sessions. Used by tests and the demo reset. */
 export function resetStore(): Store {
-  globalForStore.__appStore = createStore();
-  return globalForStore.__appStore;
+  globalThis.__appStore = createStore();
+  return globalThis.__appStore;
 }

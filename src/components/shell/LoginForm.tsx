@@ -3,6 +3,7 @@
 import { useState, type SubmitEvent } from 'react';
 
 import { USER_STATUS, type DemoAccount } from '@/domain/types';
+import { loginResponse } from '@/domain/responses';
 import { ApiError, apiFetch } from '@/lib/api-client';
 
 export function LoginForm({ accounts }: { accounts: readonly DemoAccount[] }) {
@@ -16,7 +17,7 @@ export function LoginForm({ accounts }: { accounts: readonly DemoAccount[] }) {
     setSubmitting(true);
     setError(null);
     try {
-      const { homePath } = await apiFetch<{ homePath: string }>('/api/auth/login', {
+      const { homePath } = await apiFetch('/api/auth/login', loginResponse, {
         method: 'POST',
         body: { email, password },
       });

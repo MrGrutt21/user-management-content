@@ -1,5 +1,8 @@
+import type { z } from 'zod';
+
 import { ERROR_CODE, type ApiErrorBody, type ErrorCode } from '@/domain/errors';
 import { LOGIN_REASON, loginPath } from '@/domain/paths';
+import { apiErrorResponse } from '@/domain/responses';
 
 /**
  * The only way client components talk to the server. It decides nothing about
@@ -21,13 +24,15 @@ export class ApiError extends Error {
   }
 }
 
-function isApiErrorBody(value: unknown): value is ApiErrorBody {
-  if (typeof value !== 'object' || value === null || !('error' in value)) return false;
-  const error: unknown = value.error;
-  return typeof error === 'object' && error !== null && 'code' in error && 'message' in error;
-}
-
-export async function apiFetch<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
+/**
+ * Fetch JSON from our API and validate it with `schema` (from src/domain/responses.ts).
+ * Errors come back as ApiError with the server's code; a body of the wrong shape is an error too.
+ */
+export async function apiFetch<S extends z.ZodType>(
+  path: string,
+  schema: S,
+  init?: { method?: string; body?: unknown },
+): Promise<z.output<S>> {
   const response = await fetch(path, {
     method: init?.method ?? 'GET',
     headers: init?.body === undefined ? undefined : { 'Content-Type': 'application/json' },
@@ -42,11 +47,15 @@ export async function apiFetch<T>(path: string, init?: { method?: string; body?:
     window.location.assign(loginPath(LOGIN_REASON.SESSION_ENDED));
   }
   if (!response.ok) {
+    const failure = apiErrorResponse.safeParse(data);
     throw new ApiError(
       response.status,
-      isApiErrorBody(data) ? data.error : { code: ERROR_CODE.INTERNAL, message: `Request failed (${response.status})` },
+      failure.success ? failure.data.error : { code: ERROR_CODE.INTERNAL, message: `Request failed (${response.status})` },
     );
   }
-  // The server is the source of these types (src/domain/types.ts); this is the one trusted boundary cast.
-  return data as T;
+  const parsed = schema.safeParse(data);
+  if (!parsed.success) {
+    throw new ApiError(response.status, { code: ERROR_CODE.INTERNAL, message: 'Unexpected response from the server' });
+  }
+  return parsed.data;
 }

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 import { LOGIN_REASON, loginPath } from '@/domain/paths';
+import { okResponse } from '@/domain/responses';
 import { ApiError, apiFetch } from '@/lib/api-client';
 
 /** Shown only when the server has DEMO_RESET=true. The endpoint itself also checks it. */
@@ -15,7 +16,7 @@ export function DemoResetButton() {
     setBusy(true);
     setError(null);
     try {
-      await apiFetch<{ ok: boolean }>('/api/demo/reset', { method: 'POST' });
+      await apiFetch('/api/demo/reset', okResponse, { method: 'POST' });
       // Everyone is logged out now; a full reload re-renders the server components.
       window.location.assign(loginPath(LOGIN_REASON.DEMO_RESET));
     } catch (err) {

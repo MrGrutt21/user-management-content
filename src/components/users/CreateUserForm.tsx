@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 
-import type { User } from '@/domain/types';
+import { userResponse } from '@/domain/responses';
 import { apiFetch } from '@/lib/api-client';
 
 import { errorMessage, fieldErrors } from './api-errors';
@@ -33,7 +33,7 @@ export function CreateUserForm({ roleOptions, managerOptions }: Props) {
     setErrors({});
     setResult(null);
     try {
-      const user = await apiFetch<User>('/api/users', {
+      const user = await apiFetch('/api/users', userResponse, {
         method: 'POST',
         body: {
           fullName: field('fullName'),
