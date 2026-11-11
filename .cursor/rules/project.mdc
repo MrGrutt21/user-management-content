@@ -1,0 +1,16 @@
+---
+description: Rules for every change in this repository
+alwaysApply: true
+---
+
+Before writing code, read @AGENTS.md. It is the rulebook for this repo and wins over anything else, including your own habits from other Next.js projects.
+
+The rules are enforced, not just written down. `npm run check` (typecheck, lint, tests) runs before every commit through `.githooks/pre-commit`. If it fails, the change is wrong, not the check:
+
+- Permissions come only from `ROLE_POLICIES` in `src/domain/roles.ts` and the functions in `src/server/auth/permissions.ts`. Never compare role strings or branch on a role anywhere else.
+- Who may be someone's manager is `reportsTo` in `ROLE_POLICIES`. Do not add a new field or check for it elsewhere.
+- Every route handler is `withApi({ capability })` or `withPublicApi`. Every signed-in page is under `src/app/(app)/` and starts with `await requirePage(action)`.
+- Request bodies are `.strict()` zod schemas in `src/domain/schemas.ts`. Responses read by the browser are validated with `src/domain/responses.ts`.
+- No `any`, no `as` casts (except `as const`), no `!`, no `@ts-ignore`, no `eslint-disable`.
+- `tests/permissions.test.ts` (the permission matrix) and `tests/architecture.test.ts` (routes, pages, structure) are the spec. Update them only when the task is to change that rule, and say so in your answer.
+- Never commit with `--no-verify`, and never delete or weaken a check to make it pass.

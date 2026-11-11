@@ -1,0 +1,5 @@
+#!/bin/sh
+# Runs every check before a commit (installed by `npm install` via the "prepare" script).
+# Do not bypass it with --no-verify: a failure means the change breaks a rule in AGENTS.md.
+echo "pre-commit: npm run check"
+npm run check

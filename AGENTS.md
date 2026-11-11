@@ -22,12 +22,13 @@ A Next.js 16 (App Router) app with three roles (IT, manager, user), users kept i
 | Types | `npm run typecheck` (runs `next typegen` first: `LayoutProps`/`PageProps` come from it) |
 | Lint | `npm run lint` (also enforces the import boundaries below) |
 | Tests | `npm test` (Vitest, `tests/**/*.test.ts`) |
-| All checks | `npm run check`. Run it before every commit. |
+| All checks | `npm run check`. The pre-commit hook (`.githooks/`, installed by `npm install`) runs it on every commit. Never use `--no-verify`. |
 
 ## Where things live
 
 ```
-src/domain/   framework-free TS: roles.ts (THE role policy), types.ts, schemas.ts (zod), errors.ts, paths.ts
+src/domain/   framework-free TS: roles.ts (THE role policy), types.ts, schemas.ts (request bodies, zod),
+              responses.ts (what the browser accepts back), errors.ts, paths.ts, client-query.ts
 src/server/   server only (each file starts with `import 'server-only'`)
   db/         store.ts (getStore/resetStore), seed-users.ts, seed-clients.ts (deterministic generator)
   auth/       session.ts (cookie + sessions), permissions.ts (hasCapability/canActOn),
@@ -35,12 +36,14 @@ src/server/   server only (each file starts with `import 'server-only'`)
   users/      user-service.ts (use cases), user-rules.ts (invariants: yourself, last active IT)
   clients/    client-service.ts (server pagination, sort, filter)
   demo/       demo-service.ts (reset to seed, behind DEMO_RESET)
-  http/       api.ts (withApi/withPublicApi, readJson, errors → JSON), errors.ts (AppError, HTTP status per code)
+  http/       api.ts (withApi/withPublicApi, body limits, errors → JSON), errors.ts (AppError, HTTP status per code)
 src/app/      pages and app/api/** route handlers. Thin: guard, parse, call a service, return JSON.
   (app)/      signed-in pages (/content…, /manage-users); its layout renders the top bar, forbidden.tsx the 403
   login/      public; no top bar. _components/ = server components that may import @/server (TopBar)
 src/components/  'use client' components. They talk to the server only through src/lib/api-client.ts.
-tests/        Vitest. tests/support/server-only-stub.ts replaces `server-only` in tests.
+tests/        Vitest. permissions.test.ts = the permission matrix (the spec), architecture.test.ts = route
+              inventory and structural rules, api*.test.ts = HTTP through the real route handlers.
+              tests/support/server-only-stub.ts replaces `server-only` in tests.
 ```
 
 Import rules (lint errors, see `eslint.config.mjs`):
@@ -78,8 +81,17 @@ Import rules (lint errors, see `eslint.config.mjs`):
    - The handler it calls must return a `Response`, not a `Promise`: do not make it `async`, and do not read `req.json()` yourself. Validate `body` with `parseOrThrow`.
    - Node is single-threaded, so this is what keeps two concurrent "deactivate the other IT" requests from both passing the last-IT check.
 8. **Always call `getStore()` at the point of use.** Never keep it in a module-level variable: `resetStore()` swaps the object.
-9. **No `any`, no `@ts-ignore`** (lint errors). The one cast at the trust boundary is in `src/lib/api-client.ts`, with a comment.
-10. **Errors are `AppError(code, message)`.**
+9. **The compiler is never lied to.** These are lint errors:
+   - `any`, explicit or leaking in from `JSON.parse` / `response.json()`;
+   - `as` casts (`as const` is fine), the `!` non-null assertion, `@ts-ignore`;
+   - any `eslint-disable` comment, which `tests/architecture.test.ts` also rejects.
+
+   The browser reads API answers only through `apiFetch(path, schema)`, with a schema from `src/domain/responses.ts`.
+10. **A new route or page fails `tests/architecture.test.ts` until you add it to the inventory there.**
+    - The route needs its method and guard: `public`, `signed-in` or the capability.
+    - The page needs `requirePage(action)` as its first line.
+    - This is deliberate: it makes you decide who may call it. Never weaken the test to get past it.
+11. **Errors are `AppError(code, message)`.**
     - Codes are in `src/domain/errors.ts`, HTTP statuses in `src/server/http/errors.ts`.
     - The API answers `{ error: { code, message } }`, never a bare string.
 
@@ -103,6 +115,7 @@ Import rules (lint errors, see `eslint.config.mjs`):
   - Ivan deactivating himself while Iryna is active → 403 `CANNOT_DEACTIVATE_SELF`;
   - once he is the last active IT → 409 `LAST_ACTIVE_ROLE_MEMBER`.
 - **A user outside your scope** (Anna → Dmytro) gets 403, not 404.
+- **Request bodies must be JSON and at most 16 KB.** Anything else gets 415 or 413. An unknown `/api/*` path gets a JSON 404. A method a route does not export gets 405.
 - **Deactivating a user deletes all their sessions.** Reactivating them does not revive old sessions.
 - **Users and Clients are different entities.** Clients never log in and have their own `status` (`active`/`churned`).
 - **`forbidden()` and `redirect()` work by throwing.** Never call them inside `try/catch` or behind a `Suspense` boundary, or the page answers 200.
