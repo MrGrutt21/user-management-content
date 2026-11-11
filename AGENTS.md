@@ -91,6 +91,9 @@ Import rules (lint errors, see `eslint.config.mjs`):
   - Not other managers (unless one reports to them).
   - Not users without a manager.
   - Not users of another manager, even a deactivated one.
+- **Only a role with `canHaveManager` has a `managerId`** (today: user). Creating an IT or manager with a manager is a 400 `INVALID_MANAGER`, and moving someone into such a role clears their `managerId`.
+  - A manager who is demoted or deactivated keeps their reports linked. Only IT can edit those reports until the manager is back.
+  - Users are never deleted. There is no DELETE endpoint, only deactivation.
 - **IT may edit its own name/email,** but may not change its own role or status.
   - "Demote" means any change of your own role: roles are not ranked.
 - **"Last active IT" is a role flag, not a role name.** `keepAtLeastOneActive: true` in `ROLE_POLICIES`. The check runs before the self-check, so:
@@ -107,7 +110,7 @@ Import rules (lint errors, see `eslint.config.mjs`):
 
 ## Adding a fourth role
 
-1. In `src/domain/roles.ts`, add a key to `ROLE` and an entry to `ROLE_POLICIES`. TypeScript will not compile until every action has a scope (`all` / `directReports` / `none`). Also set `homePath`, `canHaveReports` and `keepAtLeastOneActive`.
+1. In `src/domain/roles.ts`, add a key to `ROLE` and an entry to `ROLE_POLICIES`. TypeScript will not compile until every action has a scope (`all` / `directReports` / `none`). Also set `homePath`, `canHaveReports`, `canHaveManager` and `keepAtLeastOneActive`.
 2. If the role needs something no existing action covers:
    - add the action to `ACTIONS` and decide it for every role;
    - guard the page with `requirePage(action)` and the route with `withApi({ capability })` or a `canActOn` check in the service.

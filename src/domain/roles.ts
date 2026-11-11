@@ -44,8 +44,13 @@ export type RolePolicy = {
   label: string;
   /** Where this role lands after login and when it opens `/`. */
   homePath: AppPath;
-  /** May other users have this user as `managerId`? */
+  /** May other users have this user as their `managerId`? */
   canHaveReports: boolean;
+  /**
+   * May this user have a `managerId` at all? Creating such a user with a manager is a 400,
+   * and moving a user into a role without it clears their `managerId`.
+   */
+  canHaveManager: boolean;
   /** Rule 4: the system must never end up with zero active users of this role. */
   keepAtLeastOneActive: boolean;
   can: Readonly<Record<Action, Scope>>;
@@ -57,6 +62,7 @@ export const ROLE_POLICIES: Readonly<Record<Role, RolePolicy>> = {
     label: 'IT',
     homePath: PATHS.manageUsers,
     canHaveReports: false,
+    canHaveManager: false,
     keepAtLeastOneActive: true,
     can: {
       'content.view': 'none',
@@ -71,6 +77,7 @@ export const ROLE_POLICIES: Readonly<Record<Role, RolePolicy>> = {
     label: 'Manager',
     homePath: PATHS.content,
     canHaveReports: true,
+    canHaveManager: false,
     keepAtLeastOneActive: false,
     can: {
       'content.view': 'all',
@@ -85,6 +92,7 @@ export const ROLE_POLICIES: Readonly<Record<Role, RolePolicy>> = {
     label: 'User',
     homePath: PATHS.content,
     canHaveReports: false,
+    canHaveManager: true,
     keepAtLeastOneActive: false,
     can: {
       'content.view': 'all',
@@ -96,7 +104,3 @@ export const ROLE_POLICIES: Readonly<Record<Role, RolePolicy>> = {
     },
   },
 };
-
-export function isRole(value: string): value is Role {
-  return (ROLES as readonly string[]).includes(value);
-}

@@ -16,6 +16,9 @@ export function CreateUserForm({ roleOptions, managerOptions }: Props) {
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [role, setRole] = useState('');
+  // Only roles whose policy allows a manager get the field; the server rejects it for the others anyway.
+  const showManager = roleOptions.find((option) => option.value === role)?.canHaveManager ?? false;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,11 +37,12 @@ export function CreateUserForm({ roleOptions, managerOptions }: Props) {
           fullName: field('fullName'),
           email: field('email'),
           role: field('role'),
-          managerId: field('managerId') || null,
+          managerId: showManager ? field('managerId') || null : null,
           password: field('password'),
         },
       });
       form.reset();
+      setRole('');
       setResult({ ok: true, text: `Created ${user.fullName}` });
       router.refresh();
     } catch (error) {
@@ -66,7 +70,7 @@ export function CreateUserForm({ roleOptions, managerOptions }: Props) {
         </label>
         <label>
           Role
-          <select name="role" required defaultValue="">
+          <select name="role" required value={role} onChange={(event) => setRole(event.target.value)}>
             <option value="" disabled>Choose a role</option>
             {roleOptions.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
@@ -74,16 +78,18 @@ export function CreateUserForm({ roleOptions, managerOptions }: Props) {
           </select>
           <FieldError text={errors.role} />
         </label>
-        <label>
-          Manager
-          <select name="managerId" defaultValue="">
-            <option value="">No manager</option>
-            {managerOptions.map((manager) => (
-              <option key={manager.id} value={manager.id}>{manager.fullName}</option>
-            ))}
-          </select>
-          <FieldError text={errors.managerId} />
-        </label>
+        {showManager && (
+          <label>
+            Manager
+            <select name="managerId" defaultValue="">
+              <option value="">No manager</option>
+              {managerOptions.map((manager) => (
+                <option key={manager.id} value={manager.id}>{manager.fullName}</option>
+              ))}
+            </select>
+            <FieldError text={errors.managerId} />
+          </label>
+        )}
         <label>
           Password
           <input name="password" type="password" autoComplete="new-password" required />

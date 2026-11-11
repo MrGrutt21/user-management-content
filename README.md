@@ -138,7 +138,9 @@ All six are covered by `tests/api.test.ts`, which calls the real route handlers 
   - IT may still edit its own name and email.
 - **The last-active check runs before the self check.** That is why Ivan's second attempt fails with a different reason (`LAST_ACTIVE_ROLE_MEMBER`, 409) than the first (`CANNOT_DEACTIVATE_SELF`, 403).
 - **A target outside your scope gets 403, not 404.** It is clearer for this exercise; 404 would hide which ids exist.
-- **A manager can edit a direct report only through `managerId`.** If an IT changes a manager's role, that person's reports keep their `managerId` but nobody except IT can edit them until they are reassigned.
+- **Only users have a manager.** `canHaveManager` is true only for the user role, so creating an IT or manager account with a `managerId` is a 400 `INVALID_MANAGER`. Promoting a user to manager or IT clears their `managerId`, and the old manager loses them.
+- **A demoted or deactivated manager keeps their reports linked.** The reports keep their `managerId`, nobody except IT can edit them, and nobody new can be placed under that person. If the manager is restored, they manage the same people again.
+- **Users are never deleted, only deactivated.** There is no DELETE endpoint (it answers 405), so a `managerId` never points to a missing user.
 - **Mutations check and write with no `await` in between.**
   - `withApi` awaits the route params and the body first.
   - Only then does it resolve the session and call a handler that is synchronous by type.

@@ -66,8 +66,16 @@ export function canHaveReportsNow(user: User): boolean {
   return user.status === USER_STATUS.ACTIVE && ROLE_POLICIES[user.role].canHaveReports;
 }
 
-export function checkManagerAssignable(users: Iterable<User>, managerId: string | null): Decision {
+/**
+ * Only a role with `canHaveManager` may have a manager, and the manager must be an active
+ * user whose role `canHaveReports`. A manager or an IT account therefore never has a `managerId`.
+ */
+export function checkManagerAssignable(users: Iterable<User>, role: Role, managerId: string | null): Decision {
   if (managerId === null) return ALLOWED;
+  const policy = ROLE_POLICIES[role];
+  if (!policy.canHaveManager) {
+    return deny(ERROR_CODE.INVALID_MANAGER, `A ${policy.label} account cannot have a manager`);
+  }
   for (const user of users) {
     if (user.id === managerId && canHaveReportsNow(user)) return ALLOWED;
   }

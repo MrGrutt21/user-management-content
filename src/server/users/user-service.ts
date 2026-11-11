@@ -63,7 +63,7 @@ export function createUser(actor: User, input: CreateUserInput): User {
   const store = getStore();
   enforce(checkCreate(actor));
   enforce(checkEmailAvailable(store.users.values(), input.email));
-  enforce(checkManagerAssignable(store.users.values(), input.managerId));
+  enforce(checkManagerAssignable(store.users.values(), input.role, input.managerId));
 
   const user: User = {
     id: newUserId(),
@@ -96,7 +96,10 @@ export function updateProfile(actor: User, id: string, input: UpdateProfileInput
 export function changeRole(actor: User, id: string, role: Role): User {
   const target = findUser(id);
   enforce(checkChangeRole(getStore().users.values(), actor, target, role));
-  return save({ ...target, role });
+  // Leaving a role that may have a manager drops the manager. The person's own reports (if they
+  // were a manager) keep their managerId: only IT can edit them until they are reassigned.
+  const managerId = ROLE_POLICIES[role].canHaveManager ? target.managerId : null;
+  return save({ ...target, role, managerId });
 }
 
 export function changeStatus(actor: User, id: string, status: UserStatus): User {

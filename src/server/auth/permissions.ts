@@ -25,7 +25,13 @@ export function canActOn(actor: User, action: Action, target: User): boolean {
     case 'all':
       return true;
     case 'directReports':
-      return target.managerId === actor.id && target.id !== actor.id;
+      // The last condition is belt and braces: the store never gives a manager or IT account
+      // a managerId, but "not other managers" should not depend on that alone.
+      return (
+        target.managerId === actor.id &&
+        target.id !== actor.id &&
+        ROLE_POLICIES[target.role].canHaveManager
+      );
     case 'none':
       return false;
     default:

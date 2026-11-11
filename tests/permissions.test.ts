@@ -88,6 +88,7 @@ describe('canActOn: direct reports scope', () => {
   it.each([
     ['another manager’s report', otherReport],
     ['another manager', otherManager],
+    ['a manager whose managerId is hers (the store never allows it)', makeUser({ id: 'marta', role: ROLE.MANAGER, managerId: 'anna' })],
     ['an unassigned user', unassigned],
     ['themselves', anna],
     ['an IT account', ivan],

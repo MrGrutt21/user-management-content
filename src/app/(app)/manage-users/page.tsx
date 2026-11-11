@@ -15,7 +15,11 @@ export default async function ManageUsersPage() {
 
   const rows = listVisibleUsers(actor);
   const canCreate = hasCapability(actor, 'users.create');
-  const roleOptions = ROLES.map((role) => ({ value: role, label: ROLE_POLICIES[role].label }));
+  const roleOptions = ROLES.map((role) => ({
+    value: role,
+    label: ROLE_POLICIES[role].label,
+    canHaveManager: ROLE_POLICIES[role].canHaveManager,
+  }));
   // The heading follows the scope of the view permission, not the role name.
   const heading = ROLE_POLICIES[actor.role].can['users.view'] === 'all' ? 'All users' : 'Your direct reports';
 
