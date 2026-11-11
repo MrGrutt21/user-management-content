@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ERROR_CODE, type ErrorCode } from '@/domain/errors';
-import { ROLE, ROLES, ROLE_POLICIES } from '@/domain/roles';
+import { ROLE, ROLES, ROLE_POLICIES, canHaveManager, canHaveReports, mayReportTo } from '@/domain/roles';
 import { createUserSchema, type CreateUserInput } from '@/domain/schemas';
 import { USER_STATUS, type User } from '@/domain/types';
 import { canActOn } from '@/server/auth/permissions';
@@ -49,11 +49,11 @@ function newUserInput(overrides: Partial<CreateUserInput>): CreateUserInput {
   });
 }
 
-/** Every managerId in the store must satisfy the two policy flags. Checked after each scenario. */
+/** Every managerId in the store points to an existing user and is allowed by `reportsTo`. */
 function expectLinksConsistent(): void {
   for (const member of getStore().users.values()) {
     if (member.managerId === null) continue;
-    expect(ROLE_POLICIES[member.role].canHaveManager, `${member.id} may not have a manager`).toBe(true);
+    expect(canHaveManager(member.role), `${member.id} may not have a manager`).toBe(true);
     expect(getStore().users.has(member.managerId), `${member.id} points to a missing user`).toBe(true);
   }
 }
@@ -63,16 +63,19 @@ beforeEach(() => {
 });
 
 describe('policy flags', () => {
-  it('only the user role may have a manager; only the manager role may have reports', () => {
-    expect(ROLES.filter((role) => ROLE_POLICIES[role].canHaveManager)).toEqual([ROLE.USER]);
-    expect(ROLES.filter((role) => ROLE_POLICIES[role].canHaveReports)).toEqual([ROLE.MANAGER]);
+  it('users report to managers; IT and managers report to nobody', () => {
+    expect(ROLE_POLICIES[ROLE.USER].reportsTo).toEqual([ROLE.MANAGER]);
+    expect(ROLE_POLICIES[ROLE.MANAGER].reportsTo).toEqual([]);
+    expect(ROLE_POLICIES[ROLE.IT].reportsTo).toEqual([]);
+    expect(ROLES.filter(canHaveManager)).toEqual([ROLE.USER]);
+    expect(ROLES.filter(canHaveReports)).toEqual([ROLE.MANAGER]);
   });
 
   it('the seed already follows them', () => {
     expectLinksConsistent();
     for (const member of getStore().users.values()) {
       if (member.managerId === null) continue;
-      expect(ROLE_POLICIES[user(member.managerId).role].canHaveReports).toBe(true);
+      expect(mayReportTo(member.role, user(member.managerId).role)).toBe(true);
     }
   });
 });
@@ -102,8 +105,22 @@ describe('creating a user with a manager', () => {
     }
   });
 
-  it('the manager options offered to IT are exactly the active managers', () => {
-    expect(listAssignableManagers().map((option) => option.id)).toEqual(['usr_anna', 'usr_bohdan', 'usr_marta']);
+  it('the manager options offered to IT are exactly the active managers, with their roles', () => {
+    expect(listAssignableManagers()).toEqual([
+      { id: 'usr_anna', fullName: 'Anna Shevchenko', role: ROLE.MANAGER },
+      { id: 'usr_bohdan', fullName: 'Bohdan Melnyk', role: ROLE.MANAGER },
+      { id: 'usr_marta', fullName: 'Marta Bondar', role: ROLE.MANAGER },
+    ]);
+  });
+
+  it('the refusal names the roles the new person may report to', () => {
+    let message = '';
+    try {
+      createUser(user('usr_ivan'), newUserInput({ managerId: 'usr_olena' }));
+    } catch (error) {
+      if (error instanceof AppError) message = error.message;
+    }
+    expect(message).toBe('A User can report only to an active Manager');
   });
 });
 

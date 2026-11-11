@@ -3,7 +3,7 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 
 import { ERROR_CODE } from '@/domain/errors';
-import { ROLES, ROLE_POLICIES, type Role } from '@/domain/roles';
+import { ROLES, ROLE_POLICIES, mayReportTo, type Role } from '@/domain/roles';
 import type { CreateUserInput, UpdateProfileInput } from '@/domain/schemas';
 import { USER_STATUS, type Me, type User, type UserRow, type UserStatus } from '@/domain/types';
 import { canActOn } from '@/server/auth/permissions';
@@ -12,13 +12,13 @@ import { getStore } from '@/server/db/store';
 import { AppError, enforce } from '@/server/http/errors';
 
 import {
-  canHaveReportsNow,
   checkChangeRole,
   checkChangeStatus,
   checkCreate,
   checkEditProfile,
   checkEmailAvailable,
   checkManagerAssignable,
+  isAssignableManager,
 } from './user-rules';
 
 /**
@@ -44,11 +44,12 @@ export function getVisibleUser(actor: User, id: string): UserRow {
   return toRow([...getStore().users.values()], actor, target);
 }
 
-export function listAssignableManagers(): { id: string; fullName: string }[] {
+/** Everyone a new user could report to. The form narrows it by the chosen role's `reportsTo`. */
+export function listAssignableManagers(): { id: string; fullName: string; role: Role }[] {
   return [...getStore().users.values()]
-    .filter(canHaveReportsNow)
+    .filter(isAssignableManager)
     .sort((a, b) => a.fullName.localeCompare(b.fullName))
-    .map(({ id, fullName }) => ({ id, fullName }));
+    .map(({ id, fullName, role }) => ({ id, fullName, role }));
 }
 
 export function getMe(actor: User): Me {
@@ -96,10 +97,7 @@ export function updateProfile(actor: User, id: string, input: UpdateProfileInput
 export function changeRole(actor: User, id: string, role: Role): User {
   const target = findUser(id);
   enforce(checkChangeRole(getStore().users.values(), actor, target, role));
-  // Leaving a role that may have a manager drops the manager. The person's own reports (if they
-  // were a manager) keep their managerId: only IT can edit them until they are reassigned.
-  const managerId = ROLE_POLICIES[role].canHaveManager ? target.managerId : null;
-  return save({ ...target, role, managerId });
+  return save({ ...target, role, managerId: managerIdAfterRoleChange(target, role) });
 }
 
 export function changeStatus(actor: User, id: string, status: UserStatus): User {
@@ -108,6 +106,17 @@ export function changeStatus(actor: User, id: string, status: UserStatus): User 
   const updated = save({ ...target, status });
   if (status === USER_STATUS.DEACTIVATED) revokeUserSessions(target.id);
   return updated;
+}
+
+/**
+ * The person keeps their manager only if the new role may report to that manager's role.
+ * Their own reports (if they were a manager) keep their managerId: `canActOn` stops counting
+ * the link, so only IT can edit those people until this person is back in a fitting role.
+ */
+function managerIdAfterRoleChange(target: User, role: Role): string | null {
+  if (target.managerId === null) return null;
+  const manager = getStore().users.get(target.managerId);
+  return manager && mayReportTo(role, manager.role) ? target.managerId : null;
 }
 
 function findUser(id: string): User {

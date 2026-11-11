@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { ALLOWED, ERROR_CODE, deny, type Decision } from '@/domain/errors';
-import { ROLE_POLICIES, type Role } from '@/domain/roles';
+import { ROLE_POLICIES, canHaveReports, mayReportTo, type Role } from '@/domain/roles';
 import { USER_STATUS, type User, type UserStatus } from '@/domain/types';
 import { canActOn, hasCapability } from '@/server/auth/permissions';
 
@@ -61,25 +61,26 @@ export function checkChangeStatus(users: Iterable<User>, actor: User, target: Us
   return ALLOWED;
 }
 
-/** Can other users have this one as their manager? Also used for the create form's options. */
-export function canHaveReportsNow(user: User): boolean {
-  return user.status === USER_STATUS.ACTIVE && ROLE_POLICIES[user.role].canHaveReports;
+/** Can somebody be placed under this user right now? Also the create form's manager options. */
+export function isAssignableManager(user: User): boolean {
+  return user.status === USER_STATUS.ACTIVE && canHaveReports(user.role);
 }
 
 /**
- * Only a role with `canHaveManager` may have a manager, and the manager must be an active
- * user whose role `canHaveReports`. A manager or an IT account therefore never has a `managerId`.
+ * A person with `role` may have `managerId` only if their role's `reportsTo` lists the role of
+ * that manager, and the manager is active. A role with an empty `reportsTo` never has a manager.
  */
 export function checkManagerAssignable(users: Iterable<User>, role: Role, managerId: string | null): Decision {
   if (managerId === null) return ALLOWED;
   const policy = ROLE_POLICIES[role];
-  if (!policy.canHaveManager) {
+  if (policy.reportsTo.length === 0) {
     return deny(ERROR_CODE.INVALID_MANAGER, `A ${policy.label} account cannot have a manager`);
   }
   for (const user of users) {
-    if (user.id === managerId && canHaveReportsNow(user)) return ALLOWED;
+    if (user.id === managerId && user.status === USER_STATUS.ACTIVE && mayReportTo(role, user.role)) return ALLOWED;
   }
-  return deny(ERROR_CODE.INVALID_MANAGER, 'The manager must be an active user whose role can have direct reports');
+  const allowed = policy.reportsTo.map((managerRole) => ROLE_POLICIES[managerRole].label).join(' or ');
+  return deny(ERROR_CODE.INVALID_MANAGER, `A ${policy.label} can report only to an active ${allowed}`);
 }
 
 /** Emails are compared as stored: the schemas trim and lower-case them. */

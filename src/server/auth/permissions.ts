@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { ROLE_POLICIES, type Action, type Scope } from '@/domain/roles';
+import { ROLE_POLICIES, mayReportTo, type Action, type Scope } from '@/domain/roles';
 import type { User } from '@/domain/types';
 
 /**
@@ -25,13 +25,10 @@ export function canActOn(actor: User, action: Action, target: User): boolean {
     case 'all':
       return true;
     case 'directReports':
-      // The last condition is belt and braces: the store never gives a manager or IT account
-      // a managerId, but "not other managers" should not depend on that alone.
-      return (
-        target.managerId === actor.id &&
-        target.id !== actor.id &&
-        ROLE_POLICIES[target.role].canHaveManager
-      );
+      // The link counts only while the policy allows this pair of roles (`reportsTo`).
+      // A manager who was demoted keeps the links in the data but gets no access through them,
+      // and "not other managers" does not rest on the data alone.
+      return target.managerId === actor.id && target.id !== actor.id && mayReportTo(target.role, actor.role);
     case 'none':
       return false;
     default:

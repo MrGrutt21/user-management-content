@@ -44,13 +44,13 @@ export type RolePolicy = {
   label: string;
   /** Where this role lands after login and when it opens `/`. */
   homePath: AppPath;
-  /** May other users have this user as their `managerId`? */
-  canHaveReports: boolean;
   /**
-   * May this user have a `managerId` at all? Creating such a user with a manager is a 400,
-   * and moving a user into a role without it clears their `managerId`.
+   * Who a person with this role may report to: their `managerId` must point to an active user
+   * with one of these roles. Empty = this role never has a manager.
+   * The `directReports` scope of those roles then reaches them (see `can` below).
+   * Example: a new role attached to users or managers gets `reportsTo: [ROLE.USER, ROLE.MANAGER]`.
    */
-  canHaveManager: boolean;
+  reportsTo: readonly Role[];
   /** Rule 4: the system must never end up with zero active users of this role. */
   keepAtLeastOneActive: boolean;
   can: Readonly<Record<Action, Scope>>;
@@ -61,8 +61,7 @@ export const ROLE_POLICIES: Readonly<Record<Role, RolePolicy>> = {
   [ROLE.IT]: {
     label: 'IT',
     homePath: PATHS.manageUsers,
-    canHaveReports: false,
-    canHaveManager: false,
+    reportsTo: [],
     keepAtLeastOneActive: true,
     can: {
       'content.view': 'none',
@@ -76,8 +75,7 @@ export const ROLE_POLICIES: Readonly<Record<Role, RolePolicy>> = {
   [ROLE.MANAGER]: {
     label: 'Manager',
     homePath: PATHS.content,
-    canHaveReports: true,
-    canHaveManager: false,
+    reportsTo: [],
     keepAtLeastOneActive: false,
     can: {
       'content.view': 'all',
@@ -91,8 +89,7 @@ export const ROLE_POLICIES: Readonly<Record<Role, RolePolicy>> = {
   [ROLE.USER]: {
     label: 'User',
     homePath: PATHS.content,
-    canHaveReports: false,
-    canHaveManager: true,
+    reportsTo: [ROLE.MANAGER],
     keepAtLeastOneActive: false,
     can: {
       'content.view': 'all',
@@ -104,3 +101,18 @@ export const ROLE_POLICIES: Readonly<Record<Role, RolePolicy>> = {
     },
   },
 };
+
+/** May a person with `role` have a manager at all? */
+export function canHaveManager(role: Role): boolean {
+  return ROLE_POLICIES[role].reportsTo.length > 0;
+}
+
+/** May a person with `role` report to someone whose role is `managerRole`? */
+export function mayReportTo(role: Role, managerRole: Role): boolean {
+  return ROLE_POLICIES[role].reportsTo.includes(managerRole);
+}
+
+/** May anybody report to a person with `role`? */
+export function canHaveReports(role: Role): boolean {
+  return ROLES.some((other) => mayReportTo(other, role));
+}

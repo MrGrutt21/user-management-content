@@ -17,8 +17,10 @@ export function CreateUserForm({ roleOptions, managerOptions }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [role, setRole] = useState('');
-  // Only roles whose policy allows a manager get the field; the server rejects it for the others anyway.
-  const showManager = roleOptions.find((option) => option.value === role)?.canHaveManager ?? false;
+  // UX only: offer the managers the chosen role may report to. The server checks it again.
+  const reportsTo = roleOptions.find((option) => option.value === role)?.reportsTo ?? [];
+  const managers = managerOptions.filter((manager) => reportsTo.includes(manager.role));
+  const showManager = reportsTo.length > 0;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -81,9 +83,10 @@ export function CreateUserForm({ roleOptions, managerOptions }: Props) {
         {showManager && (
           <label>
             Manager
-            <select name="managerId" defaultValue="">
+            {/* key: a new role starts from "No manager" instead of keeping a choice it may not allow */}
+            <select key={role} name="managerId" defaultValue="">
               <option value="">No manager</option>
-              {managerOptions.map((manager) => (
+              {managers.map((manager) => (
                 <option key={manager.id} value={manager.id}>{manager.fullName}</option>
               ))}
             </select>

@@ -91,8 +91,11 @@ Import rules (lint errors, see `eslint.config.mjs`):
   - Not other managers (unless one reports to them).
   - Not users without a manager.
   - Not users of another manager, even a deactivated one.
-- **Only a role with `canHaveManager` has a `managerId`** (today: user). Creating an IT or manager with a manager is a 400 `INVALID_MANAGER`, and moving someone into such a role clears their `managerId`.
-  - A manager who is demoted or deactivated keeps their reports linked. Only IT can edit those reports until the manager is back.
+- **Who reports to whom is data: `reportsTo` in `ROLE_POLICIES`.** Today users report to managers; IT and managers report to nobody.
+  - `managerId` must point to an active user whose role is in the person's `reportsTo`. Anything else is a 400 `INVALID_MANAGER`. This includes an IT or manager account with any manager.
+  - A role change keeps `managerId` only if the new role may report to that manager's role. Otherwise it is cleared.
+  - `directReports` counts a link only while `reportsTo` allows that pair of roles. A manager who is demoted keeps their reports linked in the data, but gets no access through them. Only IT can edit those reports until the manager is back.
+  - A deactivated manager keeps their reports linked too. Nobody new can be placed under them.
   - Users are never deleted. There is no DELETE endpoint, only deactivation.
 - **IT may edit its own name/email,** but may not change its own role or status.
   - "Demote" means any change of your own role: roles are not ranked.
@@ -110,7 +113,10 @@ Import rules (lint errors, see `eslint.config.mjs`):
 
 ## Adding a fourth role
 
-1. In `src/domain/roles.ts`, add a key to `ROLE` and an entry to `ROLE_POLICIES`. TypeScript will not compile until every action has a scope (`all` / `directReports` / `none`). Also set `homePath`, `canHaveReports`, `canHaveManager` and `keepAtLeastOneActive`.
+1. In `src/domain/roles.ts`, add a key to `ROLE` and an entry to `ROLE_POLICIES`. TypeScript will not compile until every action has a scope (`all` / `directReports` / `none`). Also set `homePath`, `reportsTo` and `keepAtLeastOneActive`.
+   - If the new role is attached to someone, list their roles in `reportsTo`, e.g. `reportsTo: [ROLE.USER, ROLE.MANAGER]`.
+   - If those people should see or edit the new role's members, give their roles `directReports` for that action, e.g. `users.view` on `ROLE.USER`.
+   - Do not name a role `client`. Clients are a separate entity: the business records on `/content`, which never log in.
 2. If the role needs something no existing action covers:
    - add the action to `ACTIONS` and decide it for every role;
    - guard the page with `requirePage(action)` and the route with `withApi({ capability })` or a `canActOn` check in the service.

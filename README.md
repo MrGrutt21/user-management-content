@@ -62,7 +62,7 @@ Why no proxy/middleware for auth: Next's proxy runs apart from the app and canno
 
 ## Every place a permission decision is made
 
-1. `src/domain/roles.ts` → `ROLE_POLICIES`: the data. Each role maps every action to `all` / `directReports` / `none`, plus the `keepAtLeastOneActive` flag (rule 4).
+1. `src/domain/roles.ts` → `ROLE_POLICIES`: the data. Each role maps every action to `all` / `directReports` / `none`, plus `reportsTo` (who may be its manager) and the `keepAtLeastOneActive` flag (rule 4).
 2. `src/server/auth/permissions.ts` → `hasCapability()` and `canActOn()`: the only code that turns a role into yes or no.
 3. `src/server/users/user-rules.ts`: the rules that don't depend on the role. These are "not yourself" (rule 3) and "not the last active IT" (rule 4), plus manager and email validity.
 4. `src/server/auth/session.ts` → `resolveSession()`: is there an active user at all (rule 5).
@@ -138,7 +138,10 @@ All six are covered by `tests/api.test.ts`, which calls the real route handlers 
   - IT may still edit its own name and email.
 - **The last-active check runs before the self check.** That is why Ivan's second attempt fails with a different reason (`LAST_ACTIVE_ROLE_MEMBER`, 409) than the first (`CANNOT_DEACTIVATE_SELF`, 403).
 - **A target outside your scope gets 403, not 404.** It is clearer for this exercise; 404 would hide which ids exist.
-- **Only users have a manager.** `canHaveManager` is true only for the user role, so creating an IT or manager account with a `managerId` is a 400 `INVALID_MANAGER`. Promoting a user to manager or IT clears their `managerId`, and the old manager loses them.
+- **Who may report to whom is a list per role: `reportsTo`.** Today it is `user → [manager]`, and IT and managers report to nobody.
+  - Creating an IT or manager account with a `managerId` is a 400 `INVALID_MANAGER`, and so is a user placed under anyone but an active manager.
+  - Promoting a user to manager or IT clears their `managerId`, and the old manager loses them.
+  - A new role attached to users or managers is one line, `reportsTo: [ROLE.USER, ROLE.MANAGER]`. The server checks it, the create form offers only those people, and the `directReports` scope reaches the new role.
 - **A demoted or deactivated manager keeps their reports linked.** The reports keep their `managerId`, nobody except IT can edit them, and nobody new can be placed under that person. If the manager is restored, they manage the same people again.
 - **Users are never deleted, only deactivated.** There is no DELETE endpoint (it answers 405), so a `managerId` never points to a missing user.
 - **Mutations check and write with no `await` in between.**
