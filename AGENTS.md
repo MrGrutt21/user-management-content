@@ -37,6 +37,8 @@ src/server/   server only (each file starts with `import 'server-only'`)
   demo/       demo-service.ts (reset to seed, behind DEMO_RESET)
   http/       api.ts (withApi/withPublicApi, readJson, errors → JSON), errors.ts (AppError, HTTP status per code)
 src/app/      pages and app/api/** route handlers. Thin: guard, parse, call a service, return JSON.
+  (app)/      signed-in pages (/content…, /manage-users); its layout renders the top bar, forbidden.tsx the 403
+  login/      public; no top bar. _components/ = server components that may import @/server (TopBar)
 src/components/  'use client' components. They talk to the server only through src/lib/api-client.ts.
 tests/        Vitest. tests/support/server-only-stub.ts replaces `server-only` in tests.
 ```
@@ -71,7 +73,10 @@ Import rules (lint errors, see `eslint.config.mjs`):
    - Do not cache the current user.
    - Do not enable `cacheComponents` / `'use cache'`.
 6. **No auth in `proxy.ts` (ex-middleware).** Proxy runs apart from the app and cannot see the in-memory store.
-7. **Mutations are check-then-write with no `await` in between.** Node is single-threaded, so this is what keeps two concurrent "deactivate the other IT" requests from both passing the last-IT check.
+7. **Mutations are check-then-write with no `await` in between.**
+   - `withApi` awaits params and the body first, then resolves the session.
+   - The handler it calls must return a `Response`, not a `Promise`: do not make it `async`, and do not read `req.json()` yourself. Validate `body` with `parseOrThrow`.
+   - Node is single-threaded, so this is what keeps two concurrent "deactivate the other IT" requests from both passing the last-IT check.
 8. **Always call `getStore()` at the point of use.** Never keep it in a module-level variable: `resetStore()` swaps the object.
 9. **No `any`, no `@ts-ignore`** (lint errors). The one cast at the trust boundary is in `src/lib/api-client.ts`, with a comment.
 10. **Errors are `AppError(code, message)`.**
@@ -95,6 +100,7 @@ Import rules (lint errors, see `eslint.config.mjs`):
 - **Deactivating a user deletes all their sessions.** Reactivating them does not revive old sessions.
 - **Users and Clients are different entities.** Clients never log in and have their own `status` (`active`/`churned`).
 - **`forbidden()` and `redirect()` work by throwing.** Never call them inside `try/catch` or behind a `Suspense` boundary, or the page answers 200.
+- **A new signed-in page goes under `src/app/(app)/`** and calls `requirePage(action)` as its first line. Putting it elsewhere loses the top bar and the in-layout 403.
 - **Seeded passwords are plain text on purpose** (the task forbids hashing). They live in `store.credentials`, never on `User`.
 - **Seed data is deterministic** (fixed ids like `usr_anna`, `cl_0001`). README curl examples depend on it.
 - **`POST /api/demo/reset` exists only when `DEMO_RESET=true`.** It is a demo convenience outside the permission model and logs everyone out.
