@@ -49,6 +49,15 @@ export type Page<T> = {
   totalPages: number;
 };
 
+/** A seeded login shown on /login. Sent to the browser only in demo mode (DEMO_RESET=true). */
+export type DemoAccount = {
+  fullName: string;
+  email: string;
+  password: string;
+  roleLabel: string;
+  status: UserStatus;
+};
+
 /** The current user as the UI sees it. */
 export type Me = {
   user: User;

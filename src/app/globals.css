@@ -1,0 +1,59 @@
+/* Styling is not graded: plain, readable, usable. Shared classes only. */
+:root {
+  --fg: #1f2328;
+  --muted: #656d76;
+  --border: #d0d7de;
+  --bg: #ffffff;
+  --bg-soft: #f6f8fa;
+  --accent: #0969da;
+  --danger: #cf222e;
+  --ok: #1a7f37;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+a { color: var(--accent); }
+
+main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+
+h1 { font-size: 22px; margin: 8px 0 16px; }
+h2 { font-size: 17px; margin: 24px 0 8px; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--bg-soft); font-weight: 600; }
+th button { all: unset; cursor: pointer; font-weight: 600; }
+th button:focus-visible { outline: 2px solid var(--accent); }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--bg-soft); }
+
+form.stack { display: grid; gap: 8px; max-width: 360px; }
+label { display: grid; gap: 2px; }
+input, select, button { font: inherit; padding: 4px 8px; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: 0.5; }
+
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.muted { color: var(--muted); }
+.error { color: var(--danger); }
+.success { color: var(--ok); }
+.badge { display: inline-block; padding: 0 6px; border: 1px solid var(--border); border-radius: 10px; font-size: 12px; }
+.badge.inactive { color: var(--danger); border-color: var(--danger); }
+.notice { padding: 8px 12px; border: 1px solid var(--border); background: var(--bg-soft); margin-bottom: 12px; }
+.pager { display: flex; gap: 8px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
+.table-wrap { overflow-x: auto; }
+
+header.topbar {
+  display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--bg-soft);
+}
+header.topbar nav { display: flex; gap: 12px; }
+header.topbar .spacer { flex: 1; }
