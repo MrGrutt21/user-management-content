@@ -5,6 +5,7 @@ import type { z } from 'zod';
 
 import { ERROR_CODE } from '@/domain/errors';
 import type { Action } from '@/domain/roles';
+import { TAB_USER_HEADER } from '@/domain/session';
 import type { User } from '@/domain/types';
 import { hasCapability } from '@/server/auth/permissions';
 import { SESSION_COOKIE, resolveSession } from '@/server/auth/session';
@@ -20,7 +21,8 @@ import { AppError } from './errors';
  * synchronous code at a time, so nobody can be deactivated or demoted between "this user
  * may do it" and "it is done" (e.g. two IT deactivating each other at the same moment).
  *
- * Order: same-origin check for writes -> params + raw body -> session -> capability -> handler.
+ * Order: same-origin check for writes -> params + raw body -> session -> same user as the tab
+ * -> capability -> handler.
  * Target-specific checks (direct reports, yourself, last IT) are in the services.
  */
 
@@ -46,6 +48,14 @@ export function withApi<P = Record<string, string>>(
       const user = resolveSession(req.cookies.get(SESSION_COOKIE)?.value);
       if (!user) {
         throw new AppError(ERROR_CODE.UNAUTHENTICATED, 'Not logged in or session has ended');
+      }
+      // A stale tab must not act as whoever signed in later in another tab (see src/domain/session.ts).
+      const tabUser = req.headers.get(TAB_USER_HEADER);
+      if (tabUser !== null && tabUser !== user.id) {
+        throw new AppError(
+          ERROR_CODE.SESSION_CHANGED,
+          `This browser is now signed in as ${user.fullName}, not the account this page was opened for. Reloading.`,
+        );
       }
       if (options.capability && !hasCapability(user, options.capability)) {
         throw new AppError(ERROR_CODE.FORBIDDEN, 'Your role is not allowed to do this');

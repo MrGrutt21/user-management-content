@@ -3,6 +3,9 @@ import type { z } from 'zod';
 import { ERROR_CODE, type ApiErrorBody, type ErrorCode } from '@/domain/errors';
 import { LOGIN_REASON, loginPath } from '@/domain/paths';
 import { apiErrorResponse } from '@/domain/responses';
+import { TAB_USER_HEADER } from '@/domain/session';
+
+import { tabUserId } from './session-tab';
 
 /**
  * The only way client components talk to the server. It decides nothing about
@@ -33,9 +36,14 @@ export async function apiFetch<S extends z.ZodType>(
   schema: S,
   init?: { method?: string; body?: unknown },
 ): Promise<z.output<S>> {
+  const headers = new Headers();
+  if (init?.body !== undefined) headers.set('Content-Type', 'application/json');
+  const userId = tabUserId();
+  if (userId !== null) headers.set(TAB_USER_HEADER, userId);
+
   const response = await fetch(path, {
     method: init?.method ?? 'GET',
-    headers: init?.body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    headers,
     body: init?.body === undefined ? undefined : JSON.stringify(init.body),
     credentials: 'same-origin',
     cache: 'no-store',
@@ -48,6 +56,8 @@ export async function apiFetch<S extends z.ZodType>(
   }
   if (!response.ok) {
     const failure = apiErrorResponse.safeParse(data);
+    // Another tab switched the account: show this tab as the account the browser is signed in as.
+    if (failure.success && failure.data.error.code === ERROR_CODE.SESSION_CHANGED) window.location.reload();
     throw new ApiError(
       response.status,
       failure.success ? failure.data.error : { code: ERROR_CODE.INTERNAL, message: `Request failed (${response.status})` },

@@ -421,28 +421,69 @@ describe('sessions', () => {
     expect(getStore().sessions.size).toBe(1);
   });
 
-  it('logging in again replaces the cookie the browser had; the old token is dead', async () => {
-    const first = await login('olena@example.com', 'olena123');
-    const res = await call(loginRoute.POST, {
-      method: 'POST',
-      url: '/api/auth/login',
-      cookie: first,
-      body: { email: 'anna@example.com', password: 'anna123' },
+  it('signing in while the browser already has a live session is refused; that session stays', async () => {
+    const olena = await login('olena@example.com', 'olena123');
+    for (const password of ['anna123', 'wrong']) {
+      const res = await call(loginRoute.POST, {
+        method: 'POST',
+        url: '/api/auth/login',
+        cookie: olena,
+        body: { email: 'anna@example.com', password },
+      });
+      await expectError(res, 409, 'ALREADY_SIGNED_IN');
+      expect(res.headers.getSetCookie()).toEqual([]);
+    }
+    expect(await readObject(await call(meRoute.GET, { url: '/api/me', cookie: olena }))).toMatchObject({
+      user: { id: 'usr_olena' },
     });
-    expect(res.status).toBe(200);
-    await expectError(await call(meRoute.GET, { url: '/api/me', cookie: first }), 401, 'UNAUTHENTICATED');
   });
 
-  it('a failed login keeps the session the browser already had', async () => {
+  it('a dead cookie (logged out, deactivated, made up) does not block signing in', async () => {
     const olena = await login('olena@example.com', 'olena123');
-    const res = await call(loginRoute.POST, {
-      method: 'POST',
-      url: '/api/auth/login',
+    await call(logoutRoute.POST, { method: 'POST', url: '/api/auth/logout', cookie: olena });
+    for (const cookie of [olena, 'made-up-token']) {
+      const res = await call(loginRoute.POST, {
+        method: 'POST',
+        url: '/api/auth/login',
+        cookie,
+        body: { email: 'anna@example.com', password: 'anna123' },
+      });
+      expect(res.status).toBe(200);
+    }
+  });
+
+  it('a tab rendered for another user is refused with SESSION_CHANGED, and nothing is written', async () => {
+    const ivan = await login('ivan@example.com', 'ivan123');
+    const asTab = (tabUser: string | undefined) =>
+      call(userStatusRoute.PATCH, {
+        method: 'PATCH',
+        url: '/api/users/usr_taras/status',
+        cookie: ivan,
+        body: { status: 'deactivated' },
+        headers: tabUser === undefined ? {} : { 'x-tab-user-id': tabUser },
+        params: { id: 'usr_taras' },
+      });
+    await expectError(await asTab('usr_iryna'), 409, 'SESSION_CHANGED');
+    expect(getStore().users.get('usr_taras')?.status).toBe('active');
+    expect((await asTab('usr_ivan')).status).toBe(200);
+  });
+
+  it('without the tab header (curl, scripts) requests work as before', async () => {
+    const ivan = await login('ivan@example.com', 'ivan123');
+    expect((await patchStatus(ivan, 'usr_taras', 'deactivated')).status).toBe(200);
+  });
+
+  it('the tab check runs before the capability check, so a stale tab learns why', async () => {
+    const olena = await login('olena@example.com', 'olena123');
+    const res = await call(userStatusRoute.PATCH, {
+      method: 'PATCH',
+      url: '/api/users/usr_taras/status',
       cookie: olena,
-      body: { email: 'anna@example.com', password: 'wrong' },
+      body: { status: 'deactivated' },
+      headers: { 'x-tab-user-id': 'usr_ivan' },
+      params: { id: 'usr_taras' },
     });
-    await expectError(res, 401, 'INVALID_CREDENTIALS');
-    expect((await call(meRoute.GET, { url: '/api/me', cookie: olena })).status).toBe(200);
+    await expectError(res, 409, 'SESSION_CHANGED');
   });
 
   it('two browsers of the same user are independent; deactivation ends both', async () => {

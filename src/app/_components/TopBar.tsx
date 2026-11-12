@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { DemoResetButton } from '@/components/shell/DemoResetButton';
 import { LogoutButton } from '@/components/shell/LogoutButton';
+import { SessionSync } from '@/components/shell/SessionSync';
 import { PATHS, type AppPath } from '@/domain/paths';
 import { ROLE_POLICIES, type Action } from '@/domain/roles';
 import { getCurrentUser } from '@/server/auth/current-user';
@@ -24,6 +25,7 @@ export async function TopBar() {
 
   return (
     <header className="topbar">
+      <SessionSync userId={user?.id ?? null} />
       <Link href={PATHS.home}>
         <strong>User Management &amp; Content</strong>
       </Link>

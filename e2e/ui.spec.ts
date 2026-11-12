@@ -69,6 +69,69 @@ test.describe('a stale tab cannot do what the server no longer allows', () => {
   });
 });
 
+test.describe('one browser, several tabs: they share one sign-in', () => {
+  const topBar = (page: Page) => page.locator('header.topbar');
+
+  test('a second tab opens the account already signed in; its /login goes home', async ({ page }) => {
+    await signIn(page, 'ivan');
+    const second = await page.context().newPage();
+    await second.goto('/login');
+    await expect(second).toHaveURL(/\/manage-users$/);
+    await expect(topBar(second)).toContainText('Ivan Petrenko');
+  });
+
+  test('log out and in as someone else in one tab: the other tab follows at once', async ({ page }) => {
+    await signIn(page, 'ivan');
+    const second = await page.context().newPage();
+    await second.goto('/manage-users');
+
+    await second.getByRole('button', { name: 'Log out' }).click();
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByRole('button', { name: 'Log out' })).toHaveCount(0);
+    // Let the reloaded tab start listening before the next sign-in is announced.
+    await page.waitForLoadState('networkidle');
+
+    await signIn(second, 'iryna');
+    await expect(page).toHaveURL(/\/manage-users$/);
+    await expect(topBar(page)).toContainText('Iryna Kovalenko');
+  });
+
+  test('a tab that missed the switch cannot act as the new account: 409, nothing written, it reloads', async ({ page }) => {
+    acceptConfirms(page);
+    await signIn(page, 'ivan');
+    await expect(topBar(page)).toContainText('Ivan Petrenko');
+
+    // Switch the browser to Iryna behind the tab's back: same cookie jar, no message to the tab.
+    const browserRequests = page.context().request;
+    expect((await browserRequests.post('/api/auth/logout')).status()).toBe(200);
+    expect((await browserRequests.post('/api/auth/login', { data: credentials('iryna') })).status()).toBe(200);
+
+    const answer = page.waitForResponse((res) => res.url().endsWith('/api/users/usr_taras/status'));
+    await rowWith(page, 'taras@example.com').getByRole('button', { name: 'Deactivate' }).click();
+    expect((await answer).status()).toBe(409);
+
+    await expect(topBar(page)).toContainText('Iryna Kovalenko');
+    await expect(rowWith(page, 'taras@example.com').getByRole('button', { name: 'Deactivate' })).toBeVisible();
+  });
+
+  test('a login form left open: a second account is refused and the signed-in one offered', async ({ page }) => {
+    await page.goto('/login');
+    await page.waitForLoadState('networkidle');
+    // Signed in from elsewhere in this browser, without telling this tab.
+    expect((await page.context().request.post('/api/auth/login', { data: credentials('ivan') })).status()).toBe(200);
+
+    const { email, password } = credentials('iryna');
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password').fill(password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.getByText('You are already signed in as Ivan Petrenko')).toBeVisible();
+
+    await page.getByRole('link', { name: 'Continue as the signed-in account' }).click();
+    await expect(page).toHaveURL(/\/manage-users$/);
+    await expect(topBar(page)).toContainText('Ivan Petrenko');
+  });
+});
+
 test.describe('Scenario 3: paging through clients', () => {
   test('each page is one request of 25 clients; the detail page opens', async ({ page }) => {
     const clientCalls: string[] = [];

@@ -60,6 +60,13 @@ So when IT deactivates someone who is logged in, that person's next page load re
 
 Deactivation also deletes all of that user's sessions, so reactivating them later does not revive an old cookie.
 
+**One browser is one sign-in, shared by all its tabs** (they share the cookie). Three things keep a tab from acting as someone it does not show:
+1. A browser that is signed in skips the login form: `/login` redirects it to its home page, and `POST /api/auth/login` answers 409 `ALREADY_SIGNED_IN`. To switch accounts, log out first.
+2. Logging in or out and the demo reset make the other tabs of that browser reload at once (`BroadcastChannel`), so they show the account the browser is really signed in as.
+3. If a tab still missed the switch, the server catches it. Each API call from a page sends the id of the user the page was rendered for (`x-tab-user-id`). If the cookie now belongs to someone else, the answer is 409 `SESSION_CHANGED`, nothing is written, and the tab reloads. Calls without that header, such as curl, are not affected.
+
+To use two accounts at once, open a private window or another browser.
+
 Why not JWT or NextAuth: a stateless token is valid until it expires, so rule 5 would need a store lookup per request anyway, and then the token adds nothing. A hand-written session is about 60 lines and easy to explain.
 
 Why no proxy/middleware for auth: Next's proxy runs apart from the app and cannot see the in-memory store. A cookie-presence check there would be a second, weaker source of truth.
@@ -79,7 +86,7 @@ All endpoints return JSON. Errors look like `{ "error": { "code", "message" } }`
 
 | Method & path | Who | Notes |
 |---|---|---|
-| `POST /api/auth/login` | anyone | `{ email, password }` → session cookie |
+| `POST /api/auth/login` | anyone not signed in | `{ email, password }` → session cookie; 409 if this browser is already signed in |
 | `POST /api/auth/logout` | anyone | clears the session |
 | `GET /api/me` | logged in | the current user |
 | `GET /api/clients?page=1&limit=25&sort=name&order=asc&status=churned&q=nova` | manager, user | one page + `total`, `totalPages`; `limit` ≤ 100 |
@@ -97,7 +104,7 @@ There is one endpoint per column of the permission table, so a field cannot ride
 Status codes:
 - 401: not logged in or the session has ended.
 - 403: the role can't do this, the target is outside your scope, or you are acting on yourself.
-- 409: the last active IT, or the email is taken.
+- 409: the last active IT, the email is taken, the browser is already signed in, or the page was rendered for another account.
 - 400: validation failed (unknown keys included).
 - 404: not found, including an unknown `/api/*` path.
 - 405: a method the route does not have. There is no `DELETE`: users are deactivated, never deleted.
@@ -134,11 +141,11 @@ The rules are enforced, not only written down. The pre-commit hook runs `npm run
 - **Unit and HTTP (Vitest, `npm test`).**
   - `tests/permissions.test.ts`: the permission table written out literally. It is the spec.
   - `tests/user-rules.test.ts`, `tests/manager-links.test.ts`: rules 1–5 and who reports to whom, on the seeded store.
-  - `tests/api.test.ts`, `tests/api-edge-cases.test.ts`: the six scenarios and the edge cases around them, through the real route handlers. The edge cases include bad bodies, races, session expiry and rotation, and role changes mid-session.
+  - `tests/api.test.ts`, `tests/api-edge-cases.test.ts`: the six scenarios and the edge cases around them, through the real route handlers. The edge cases include bad bodies, races, session expiry, signing in twice, a stale tab, and role changes mid-session.
   - `tests/architecture.test.ts`: the route inventory with each method's guard, plus the structural rules in AGENTS.md.
 - **End to end (Playwright, `npm run test:e2e`)** against the production server, normally the Docker container.
   - `e2e/http.spec.ts`: page statuses and redirects for each role, 405/404/413/415, cookie flags, payload size, a race between two IT.
-  - `e2e/ui.spec.ts`: the six scenarios and the forms, clicked through in Chromium.
+  - `e2e/ui.spec.ts`: the six scenarios, the forms, and several tabs of one browser, clicked through in Chromium.
 
 ## The six scenarios
 
@@ -183,6 +190,6 @@ All six are covered twice: in `tests/api.test.ts` through the route handlers, an
 
 - An audit trail (who changed what, when) shown to IT.
 - Reassigning `managerId` from the UI, with rules for what happens to a demoted manager's reports.
-- Session expiry and rotation in the UI, rate limiting on login, and per-request logging with the actor id.
+- Session expiry in the UI, rate limiting on login, and per-request logging with the actor id.
 - Pagination and search on `/manage-users` for when there are more than a handful of users.
 - A persistence adapter behind the same store interface (the services would not change).

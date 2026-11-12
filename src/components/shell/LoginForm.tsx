@@ -1,16 +1,22 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, type SubmitEvent } from 'react';
 
-import { USER_STATUS, type DemoAccount } from '@/domain/types';
+import { ERROR_CODE } from '@/domain/errors';
+import { PATHS } from '@/domain/paths';
 import { loginResponse } from '@/domain/responses';
+import { USER_STATUS, type DemoAccount } from '@/domain/types';
 import { ApiError, apiFetch } from '@/lib/api-client';
+import { announceSessionChange } from '@/lib/session-tab';
 
 export function LoginForm({ accounts }: { accounts: readonly DemoAccount[] }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // This browser is already signed in (e.g. in another tab): offer that account instead of a second one.
+  const [alreadySignedIn, setAlreadySignedIn] = useState(false);
 
   async function onSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -21,10 +27,12 @@ export function LoginForm({ accounts }: { accounts: readonly DemoAccount[] }) {
         method: 'POST',
         body: { email, password },
       });
+      announceSessionChange();
       // Full reload, so the server components (the top bar too) render for the new user.
       window.location.assign(homePath);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not reach the server');
+      setAlreadySignedIn(err instanceof ApiError && err.code === ERROR_CODE.ALREADY_SIGNED_IN);
       setSubmitting(false);
     }
   }
@@ -59,6 +67,7 @@ export function LoginForm({ accounts }: { accounts: readonly DemoAccount[] }) {
           />
         </label>
         {error && <p className="error">{error}</p>}
+        {alreadySignedIn && <Link href={PATHS.home}>Continue as the signed-in account</Link>}
         <button type="submit" disabled={submitting}>
           {submitting ? 'Signing in…' : 'Sign in'}
         </button>

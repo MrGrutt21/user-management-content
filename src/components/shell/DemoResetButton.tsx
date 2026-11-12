@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { LOGIN_REASON, loginPath } from '@/domain/paths';
 import { okResponse } from '@/domain/responses';
 import { ApiError, apiFetch } from '@/lib/api-client';
+import { announceSessionChange } from '@/lib/session-tab';
 
 /** Shown only when the server has DEMO_RESET=true. The endpoint itself also checks it. */
 export function DemoResetButton() {
@@ -17,6 +18,7 @@ export function DemoResetButton() {
     setError(null);
     try {
       await apiFetch('/api/demo/reset', okResponse, { method: 'POST' });
+      announceSessionChange();
       // Everyone is logged out now; a full reload re-renders the server components.
       window.location.assign(loginPath(LOGIN_REASON.DEMO_RESET));
     } catch (err) {

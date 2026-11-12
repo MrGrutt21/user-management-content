@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { apiAs, baseURL, resetDemo, type SeedName } from './support';
+import { apiAs, baseURL, credentials, resetDemo, type SeedName } from './support';
 
 /**
  * The real server over HTTP, the way a reviewer probes it with curl: page statuses and
@@ -74,8 +74,8 @@ test.describe('API over the wire', () => {
   });
 
   test('the session cookie: httpOnly, SameSite=Lax, no role, Secure only over HTTPS', async () => {
-    const api = await apiAs(null);
-    const plain = await api.post('/api/auth/login', { data: { email: 'anna@example.com', password: 'anna123' } });
+    const plainBrowser = await apiAs(null);
+    const plain = await plainBrowser.post('/api/auth/login', { data: credentials('anna') });
     const cookie = plain.headers()['set-cookie'] ?? '';
     expect(cookie).toMatch(/^sid=[\w-]{40,};/);
     expect(cookie).toMatch(/HttpOnly/i);
@@ -83,12 +83,40 @@ test.describe('API over the wire', () => {
     expect(cookie).not.toMatch(/Secure/i);
     expect(cookie).not.toMatch(/manager|anna/i);
 
-    const proxied = await api.post('/api/auth/login', {
-      data: { email: 'anna@example.com', password: 'anna123' },
+    // Another browser: the first one is signed in now and would be refused.
+    const proxiedBrowser = await apiAs(null);
+    const proxied = await proxiedBrowser.post('/api/auth/login', {
+      data: credentials('anna'),
       headers: { 'x-forwarded-proto': 'https' },
     });
     expect(proxied.headers()['set-cookie'] ?? '').toMatch(/Secure/i);
-    await api.dispose();
+    await Promise.all([plainBrowser.dispose(), proxiedBrowser.dispose()]);
+  });
+
+  test('a browser that is signed in cannot sign in as someone else until it logs out', async () => {
+    const browser = await apiAs('anna');
+    const again = await browser.post('/api/auth/login', { data: credentials('ivan') });
+    expect(again.status()).toBe(409);
+    expect(await again.json()).toMatchObject({ error: { code: 'ALREADY_SIGNED_IN' } });
+    expect(again.headers()['set-cookie']).toBeUndefined();
+    expect(await (await browser.get('/api/me')).json()).toMatchObject({ user: { id: 'usr_anna' } });
+
+    expect((await browser.post('/api/auth/logout')).status()).toBe(200);
+    expect((await browser.post('/api/auth/login', { data: credentials('ivan') })).status()).toBe(200);
+    expect(await (await browser.get('/api/me')).json()).toMatchObject({ user: { id: 'usr_ivan' } });
+    await browser.dispose();
+  });
+
+  test('a request from a page rendered for another account is 409 and writes nothing', async () => {
+    const ivan = await apiAs('ivan');
+    const stale = await ivan.patch('/api/users/usr_taras/status', {
+      data: { status: 'deactivated' },
+      headers: { 'x-tab-user-id': 'usr_iryna' },
+    });
+    expect(stale.status()).toBe(409);
+    expect(await stale.json()).toMatchObject({ error: { code: 'SESSION_CHANGED' } });
+    expect(await (await ivan.get('/api/users/usr_taras')).json()).toMatchObject({ status: 'active' });
+    await ivan.dispose();
   });
 
   test('one page of clients is about 5 KB, and /content itself carries no client rows', async () => {
@@ -126,15 +154,16 @@ test.describe('API over the wire', () => {
     expect([401, 409]).toContain(statuses[1]);
     await Promise.all([ivan.dispose(), iryna.dispose()]);
 
-    // Exactly one of them can still log in.
-    const api = await apiAs(null);
+    // Exactly one of them can still log in (each from its own browser).
     const logins = await Promise.all(
-      ['ivan', 'iryna'].map((name) =>
-        api.post('/api/auth/login', { data: { email: `${name}@example.com`, password: `${name}123` } }),
-      ),
+      (['ivan', 'iryna'] as const).map(async (name) => {
+        const api = await apiAs(null);
+        const status = (await api.post('/api/auth/login', { data: credentials(name) })).status();
+        await api.dispose();
+        return status;
+      }),
     );
-    expect(logins.map((res) => res.status()).sort()).toEqual([200, 403]);
-    await api.dispose();
+    expect(logins.sort()).toEqual([200, 403]);
   });
 
   test('a cross-site write is refused even with a valid session', async () => {

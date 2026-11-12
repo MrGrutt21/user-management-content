@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 
 import { DemoResetButton } from '@/components/shell/DemoResetButton';
 import { LoginForm } from '@/components/shell/LoginForm';
+import { SessionSync } from '@/components/shell/SessionSync';
 import { LOGIN_REASON, type LoginReason } from '@/domain/paths';
 import { ROLE_POLICIES } from '@/domain/roles';
 import { getCurrentUser } from '@/server/auth/current-user';
@@ -30,6 +31,7 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
 
   return (
     <main>
+      <SessionSync userId={null} />
       <h1>Sign in</h1>
       {notice && <p className="notice">{notice}</p>}
       <LoginForm accounts={listDemoAccounts()} />

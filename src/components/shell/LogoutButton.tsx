@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { LOGIN_REASON, loginPath } from '@/domain/paths';
 import { okResponse } from '@/domain/responses';
 import { ApiError, apiFetch } from '@/lib/api-client';
+import { announceSessionChange } from '@/lib/session-tab';
 
 export function LogoutButton() {
   const [busy, setBusy] = useState(false);
@@ -15,6 +16,7 @@ export function LogoutButton() {
     setError(null);
     try {
       await apiFetch('/api/auth/logout', okResponse, { method: 'POST' });
+      announceSessionChange();
       // Full reload, so the server components (the top bar too) render as logged out.
       window.location.assign(loginPath(LOGIN_REASON.LOGGED_OUT));
     } catch (err) {

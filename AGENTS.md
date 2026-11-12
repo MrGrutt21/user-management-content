@@ -88,7 +88,7 @@ Import rules (lint errors, see `eslint.config.mjs`):
    - `as` casts (`as const` is fine), the `!` non-null assertion, `@ts-ignore`;
    - any `eslint-disable` comment, which `tests/architecture.test.ts` also rejects.
 
-   The browser reads API answers only through `apiFetch(path, schema)`, with a schema from `src/domain/responses.ts`.
+   The browser reads API answers only through `apiFetch(path, schema)`, with a schema from `src/domain/responses.ts`. A bare `fetch` from a component would also skip the stale-tab header (see "One browser is one sign-in" below).
 10. **A new route or page fails `tests/architecture.test.ts` until you add it to the inventory there.**
     - The route needs its method and guard: `public`, `signed-in` or the capability.
     - The page needs `requirePage(action)` as its first line.
@@ -119,6 +119,11 @@ Import rules (lint errors, see `eslint.config.mjs`):
 - **A user outside your scope** (Anna → Dmytro) gets 403, not 404.
 - **Request bodies must be JSON and at most 16 KB.** Anything else gets 415 or 413. An unknown `/api/*` path gets a JSON 404. A method a route does not export gets 405.
 - **Deactivating a user deletes all their sessions.** Reactivating them does not revive old sessions.
+- **One browser is one sign-in, shared by all its tabs** (one `sid` cookie).
+  - `POST /api/auth/login` from a browser that is already signed in is a 409 `ALREADY_SIGNED_IN`, even with a wrong password. Log out first. `/login` itself redirects a signed-in browser home.
+  - `apiFetch` sends `TAB_USER_HEADER` (`src/domain/session.ts`): the user the page was rendered for, bound by `SessionSync` in the top bar. If the cookie now belongs to someone else, `withApi` answers 409 `SESSION_CHANGED` before any capability check or write, and the tab reloads. Requests without the header (curl, tests) are not affected.
+  - Signing in, signing out and the demo reset call `announceSessionChange()` (`src/lib/session-tab.ts`), which makes the other tabs reload. A new button that changes the session must call it too.
+  - Two accounts at once need two browsers or a private window.
 - **Users and Clients are different entities.** Clients never log in and have their own `status` (`active`/`churned`).
 - **`forbidden()` and `redirect()` work by throwing.** Never call them inside `try/catch` or behind a `Suspense` boundary, or the page answers 200.
 - **A new signed-in page goes under `src/app/(app)/`** and calls `requirePage(action)` as its first line. Putting it elsewhere loses the top bar and the in-layout 403.
