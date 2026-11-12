@@ -2,7 +2,10 @@
 
 A small Next.js 16 (App Router, TypeScript `strict`) app with three non-hierarchical roles (IT, manager, user), users kept in memory, and 1,200 generated clients behind server-side pagination. The interesting part is **who may do what, and that the server enforces it**: every rule below holds when the API is called directly.
 
-- Live demo: _added after deploy_. All visitors share one in-memory state. Use **Reset demo data** in the top bar to restore the seed; it signs everyone out.
+- Live demo, production: http://202.181.188.225:3000
+- Live demo, development: http://202.181.188.225:3200
+
+Each address has its own in-memory state. Use **Reset demo data** in the top bar to restore the seed; it signs everyone out of that instance.
 
 ## How to run
 
